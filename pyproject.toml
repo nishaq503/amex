@@ -9,6 +9,8 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.10"
+pandas = "^1.4"
+datatable = { git = "https://github.com/h2oai/datatable.git", branch = "main" }
 
 [tool.poetry.dev-dependencies]
 
