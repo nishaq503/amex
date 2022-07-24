@@ -1,4 +1,8 @@
 import logging
+import os
+import random
+
+import numpy
 
 from . import constants
 
@@ -10,3 +14,11 @@ def make_logger(name: str):
 
 
 logger = make_logger(__name__)
+
+
+def seed_everything(seed):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    numpy.random.seed(seed)
+    return
+

@@ -4,7 +4,7 @@ import os
 KAGGLE_LOG = getattr(logging, os.environ.get('KAGGLE_LOG', 'INFO'))
 
 MAX_WORKERS = max(1, int(os.cpu_count() / 2))
-EPSILON = 1e-8  # To avoid divide-by-zero errors
+EPSILON = 1e-9  # To avoid divide-by-zero errors
 
 
 class Unset:

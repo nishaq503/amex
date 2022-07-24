@@ -7,7 +7,7 @@ import pandas
 import tensorflow
 
 from amex.utils import helpers
-from amex.utils import metrics
+from amex.utils import amex_metric
 from amex.utils import paths
 
 logging.basicConfig(
