@@ -1,89 +1,63 @@
-import os
-import random
-import time
-# import psutil
 import gc
+import time
 
-import pandas as pd
-import numpy as np
-# import matplotlib.pyplot as plt
-
-from sklearn.model_selection import KFold, StratifiedKFold
-
-import tensorflow
+import datatable
+import numpy
+import pandas
+from sklearn.model_selection import StratifiedKFold
 from tabnet.tabnet import TabNetClassifier
-# from tabnet.metrics import Metric
+from tensorflow.python.keras import callbacks
 
-from amex.utils import paths
 from amex.utils import helpers
 from amex.utils import amex_metric
-
-from . import metrics
+from amex.utils import paths
 
 logger = helpers.make_logger(__name__)
 
 
-class CFG:
-    DEBUG = True
-    model = 'tabnet'
-    N_folds = 5
-    seed = 42
+def amex_loss(y_true, y_pred):
+    m = amex_metric.amex_metric_tensorflow(y_true, y_pred)
+    return 1 - m
 
 
-helpers.seed_everything(CFG.seed)
+def read_data() -> pandas.DataFrame:
+    train_df: pandas.DataFrame = datatable.fread(paths.TRAIN_DATA_PATH).to_pandas()
+    train_df['S_2'] = pandas.to_datetime(train_df['S_2']).astype('datetime64[ns]')
+
+    train_df = train_df.groupby('customer_ID').tail(1).reset_index(drop=True)
+    train_df = train_df.fillna(-1)
+    logger.info(f'{train_df.shape = }')
+
+    target_df: pandas.DataFrame = datatable.fread(paths.TRAIN_LABELS_PATH).to_pandas()
+    logger.info(f'{target_df.shape = }')
+
+    train_df = train_df.merge(target_df, on='customer_ID')
+    logger.info(f'{train_df.shape = }')
+
+    return train_df
 
 
-def read_data() -> pd.DataFrame:
-    train: pd.DataFrame = pd.read_csv(paths.TRAIN_DATA_PATH)
-    train['S_2'] = pd.to_datetime(train['S_2']).astype('datetime64[ns]')
+def run_training(train_df: pandas.DataFrame, all_features: list[str], cfg):
+    helpers.seed_everything(cfg.seed)
 
-    train = train.groupby('customer_ID').tail(1).reset_index(drop=True)
-    train = train.fillna(-1)
-    logger.info(f'{train.shape = }')
+    train_features = train_df[all_features].to_numpy(dtype=numpy.float32)
+    train_targets = train_df['target'].to_numpy(dtype=numpy.float32)
 
-    target = pd.read_csv(paths.TRAIN_LABELS_PATH)
-    logger.info(f'{target.shape = }')
-
-    train = train.merge(target, on='customer_ID')
-    logger.info(f'{train.shape = }')
-
-    return train
-
-
-class AmexTabnet(metrics.Metric):
-
-    def __init__(self):
-        super().__init__('amex_tabnet', True)
-
-    def __call__(self, y_true, y_pred, _=None):
-        amex = amex_metric.amex_metric_numpy(y_true, y_pred[:, 1])
-        return max(amex, 0.)
-
-
-def run_training(X, y, n_folds: int):
-    # X = train[all_features],
-    # y = train['target'],
-    # nfolds = CFG.N_folds,
-    print('\n ', '-' * 50)
-    print('\nTraining: ', CFG.model)
-    print('\n ', '-' * 50)
-
-    print('\nSeed: ', CFG.seed)
-    print('N folds: ', CFG.N_folds)
-    print('train shape: ', X.shape)
-    print('targets shape: ', y.shape)
-
-    print('\nN features: ', len(all_features))
-    print('\n')
+    logger.info(f'Training {cfg.model} ...')
+    logger.info(f'{cfg.seed = } ...')
+    logger.info(f'{cfg.N_folds = } ...')
+    logger.info(f'{train_features.shape = } ...')
+    logger.info(f'{train_targets.shape = } ...')
+    logger.info(f'{len(all_features) = } ...')
 
     models = list()
 
-    kfold = StratifiedKFold(n_splits=CFG.N_folds, shuffle=True, random_state=CFG.seed)
+    splitter = StratifiedKFold(n_splits=cfg.N_folds, shuffle=True, random_state=cfg.seed)
 
-    for k, (train_idx, valid_idx) in enumerate(kfold.split(X, y)):
+    for k, (train_idx, valid_idx) in enumerate(splitter.split(train_features, train_targets)):
 
         # DEBUG MODE
-        if CFG.DEBUG is True:
+        if cfg.DEBUG is True:
             if k > 0:
                 print('\nDEBUG mode activated: Will train only one fold...\n')
                 break
@@ -91,62 +65,47 @@ def run_training(X, y, n_folds: int):
         start = time.perf_counter()
 
         model = TabNetClassifier(
-            feature_columns=all_features,
+            feature_columns=None,
             num_classes=2,
-            feature_dim=64,
             output_dim=32,
-            num_decision_steps=3,
-            relaxation_factor=1.3,
-            sparsity_coefficient=1e-3,
-            batch_momentum=0.98,
-            # cat_idxs=cat_index,
-            # n_independent=2,
-            # n_shared=2,
-            # clip_value=None,
-            # optimizer_fn=torch.optim.Adam,
+            num_features=len(all_features),
             # scheduler_fn=torch.optim.lr_scheduler.CosineAnnealingLR,
             # scheduler_params={"T_max": 6},
             # mask_type='sparsemax',
             # seed=CFG.seed
         )
 
+        model.compile(
+            optimizer='adam',
+            loss='hinge',
+            metrics=[amex_metric.amex_metric_tensorflow],
+        )
+
         # train
-        X_train, y_train = X.loc[train_idx], y.loc[train_idx]
-        X_valid, y_valid = X.loc[valid_idx], y.loc[valid_idx]
-        model.fit(np.array(X_train),
-                  np.array(y_train.values.ravel()),
-                  eval_set=[(np.array(X_valid), np.array(y_valid.values.ravel()))],
-                  max_epochs=50,
-                  patience=10,
-                  batch_size=2048,
-                  eval_metric=['auc', 'accuracy', AmexTabnet])
+        train_x, train_y = train_features[train_idx], train_targets[train_idx]
+        valid_x, valid_y = train_features[valid_idx], train_targets[valid_idx]
+
+        model.fit(
+            x=train_x,
+            y=train_y,
+            batch_size=2048,
+            epochs=50,
+            validation_data=(valid_x, valid_y),
+            callbacks=[
+                # callbacks.EarlyStopping(min_delta=1e-4, patience=10),
+            ],
+        )
 
         models.append(model)
 
         end = time.perf_counter()
-        time_delta = np.round((end - start) / 60, 2)
+        time_delta = (end - start) / 60
 
-        print(f'\nFold {k + 1}/{CFG.N_folds} | {time_delta:.2f} min')
+        logger.info(f'Fold {k + 1}/{cfg.N_folds} | {time_delta:.2f} minutes ...')
 
         # free memory
-        del X_train, y_train
-        del X_valid, y_valid
+        del train_x, train_y
+        del valid_x, valid_y
         gc.collect()
 
     return models
-
-
-def run():
-    train = read_data()
-    all_features = [col for col in train.columns if col not in ['target', 'customer_ID', 'S_2']]
-    n_features = len(all_features)
-    logger.info(f'{n_features = }')
-
-    cat_features = ['B_30', 'B_38', 'D_114', 'D_116', 'D_117', 'D_120', 'D_126', 'D_63', 'D_64', 'D_66', 'D_68']
-    cat_index = []
-    for cat in range(len(cat_features)):
-        cat_index.append(train.columns.get_loc(cat_features[cat]))
-
-    logger.info(f'{len(cat_features) = }')
-
-    return

@@ -6,8 +6,8 @@ import datatable
 import pandas
 import tensorflow
 
-from amex.utils import helpers
 from amex.utils import amex_metric
+from amex.utils import helpers
 from amex.utils import paths
 
 logging.basicConfig(
@@ -35,19 +35,19 @@ for i in range(num_runs):
     logger.info(f'Starting run {i + 1}/{num_runs} ...')
 
     start_official = time.perf_counter()
-    _ = metrics.amex_metric_official(train_labels, predictions)
+    _ = amex_metric.amex_metric_official(train_labels, predictions)
     time_official += time.perf_counter() - start_official
 
     start_datatable = time.perf_counter()
-    _ = metrics.amex_metric_datatable(datatable.Frame(train_labels), datatable.Frame(predictions))
+    _ = amex_metric.amex_metric_datatable(datatable.Frame(train_labels), datatable.Frame(predictions))
     time_datatable += time.perf_counter() - start_datatable
 
     start_numpy = time.perf_counter()
-    _ = metrics.amex_metric_numpy(train_labels.to_numpy().ravel(), predictions.to_numpy().ravel())
+    _ = amex_metric.amex_metric_numpy(train_labels.to_numpy().ravel(), predictions.to_numpy().ravel())
     time_numpy = time.perf_counter() - start_numpy
 
     start_tensorflow = time.perf_counter()
-    _ = metrics.amex_metric_tensorflow(tensorflow.convert_to_tensor(train_labels), tensorflow.convert_to_tensor(predictions))
+    _ = amex_metric.amex_metric_tensorflow(tensorflow.convert_to_tensor(train_labels), tensorflow.convert_to_tensor(predictions))
     time_tensorflow = time.perf_counter() - start_tensorflow
 
 time_official /= num_runs
@@ -63,7 +63,7 @@ logger.info(f'TensorFlow:        {time_tensorflow:02.12f} seconds.')
 logger.info(f'Done!')
 
 #             Mac,            Linux
-# Official,   0.433260854200, xx
-# Datatable,  0.060014153901, xx
-# Numpy,      0.004700350000, xx
-# TensorFlow, 0.005462712500, xx
+# Official,   0.433260854200, 0.403737221700
+# Datatable,  0.060014153901, 0.027346036400
+# Numpy,      0.004700350000, 0.004100476400
+# TensorFlow, 0.005462712500, 0.001634116600

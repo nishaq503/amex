@@ -22,12 +22,21 @@ This is my code for a submission to a kaggle competition.
     ```
 4. Install this repo via pip:
     ```shell
-    > pip install git+...
+    > pip install git+https://github.com/nishaq503/amex.git
     ```
 
 ### Linux
 
-...
+1. Create an environment using python 3.10+:
+    ```shell
+    > python -m venv .venv
+    > source .venv/bin/activate
+    ```
+2. Using pip:
+    ```shell
+    > pip install --upgrade pip setuptools wheel
+    > pip install git+https://github.com/nishaq503/amex.git
+    ```
 
 ## Usage
 

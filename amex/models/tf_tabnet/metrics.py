@@ -5,20 +5,17 @@ import abc
 
 import numpy
 import tensorflow
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import balanced_accuracy_score
-from sklearn.metrics import log_loss
-from sklearn.metrics import mean_absolute_error
-from sklearn.metrics import mean_squared_error
-from sklearn.metrics import mean_squared_log_error
-from sklearn.metrics import roc_auc_score
+from tensorflow.python import keras
+from tensorflow.python.keras import metrics
 
+from amex.utils import amex_metric
 from amex.utils import constants
 
 
-class Metric(abc.ABC):
+class Metric(keras.metrics.Metric):
 
     def __init__(self, name: str, maximize: bool):
+        super().__init__(name=name)
         self.__name = name
         self.__maximize = maximize
 
@@ -56,158 +53,26 @@ class Metric(abc.ABC):
     #     return metrics
 
 
-class AUC(Metric):
+class AmexTabnet(Metric):
 
     def __init__(self):
-        super().__init__('auc', True)
+        super().__init__('amex_tabnet', True)
 
-    def __call__(self, y_true: numpy.ndarray, y_score: numpy.ndarray, _=None):
-        """ Compute AUC of predictions.
+    def __call__(self, y_true, y_pred, _=None):
+        amex = amex_metric.amex_metric_numpy(y_true, y_pred[:, 1])
+        return max(amex, 0.)
 
-        Args:
-            y_true: Target matrix or vector
-            y_score: Score matrix or vector
+    def _serialize_to_tensors(self):
+        raise NotImplementedError
 
-        Returns:
-            AUC of predictions vs targets.
-        """
-        return roc_auc_score(y_true, y_score[:, 1])
+    def _restore_from_tensors(self, restored_tensors):
+        raise NotImplementedError
 
+    def update_state(self, *args, **kwargs):
+        raise NotImplementedError
 
-class Accuracy(Metric):
-
-    def __init__(self):
-        super().__init__('accuracy', True)
-
-    def __call__(self, y_true: numpy.ndarray, y_score: numpy.ndarray, _=None):
-        """ Compute Accuracy of predictions.
-
-        Args:
-            y_true: Target matrix or vector
-            y_score: Score matrix or vector
-
-        Returns:
-            Accuracy of predictions vs targets.
-        """
-        y_pred = numpy.argmax(y_score, axis=1)
-        return accuracy_score(y_true, y_pred)
-
-
-class BalancedAccuracy(Metric):
-
-    def __init__(self):
-        super().__init__('balanced_accuracy', True)
-
-    def __call__(self, y_true: numpy.ndarray, y_score: numpy.ndarray, _=None):
-        """ Compute Accuracy of predictions.
-
-        Args:
-            y_true: Target matrix or vector
-            y_score: Score matrix or vector
-
-        Returns:
-            Accuracy of predictions vs targets.
-        """
-        y_pred = numpy.argmax(y_score, axis=1)
-        return balanced_accuracy_score(y_true, y_pred)
-
-
-class LogLoss(Metric):
-
-    def __init__(self):
-        super().__init__('logloss', False)
-
-    def __call__(self, y_true: numpy.ndarray, y_score: numpy.ndarray, _=None):
-        """ Compute LogLoss of predictions.
-
-        Args:
-            y_true: Target matrix or vector
-            y_score: Score matrix or vector
-
-        Returns:
-            LogLoss of predictions vs targets.
-        """
-        return log_loss(y_true, y_score)
-
-
-class MAE(Metric):
-
-    def __init__(self):
-        super().__init__('mae', False)
-
-    def __call__(self, y_true: numpy.ndarray, y_score: numpy.ndarray, _=None):
-        """ Compute MAE (Mean Absolute Error) of predictions.
-
-        Args:
-            y_true: Target matrix or vector
-            y_score: Score matrix or vector
-
-        Returns:
-            MAE of predictions vs targets.
-        """
-        return mean_absolute_error(y_true, y_score)
-
-
-class MSE(Metric):
-
-    def __init__(self):
-        super().__init__('mse', False)
-
-    def __call__(self, y_true: numpy.ndarray, y_score: numpy.ndarray, _=None):
-        """ Compute MSE (Mean Squared Error) of predictions.
-
-        Args:
-            y_true: Target matrix or vector
-            y_score: Score matrix or vector
-
-        Returns:
-            MSE of predictions vs targets.
-        """
-        return mean_squared_error(y_true, y_score)
-
-
-class RMSE(Metric):
-
-    def __init__(self):
-        super().__init__('rmse', False)
-
-    def __call__(self, y_true: numpy.ndarray, y_score: numpy.ndarray, _=None):
-        """ Compute RMSE (Root Mean Squared Error) of predictions.
-
-        Args:
-            y_true: Target matrix or vector
-            y_score: Score matrix or vector
-
-        Returns:
-            TMSE of predictions vs targets.
-        """
-        return numpy.sqrt(mean_squared_error(y_true, y_score))
-
-
-class RMSLE(Metric):
-    """ Scikit-learn implementation:
-    https://scikit-learn.org/stable/modules/generated/sklearn.metrics.mean_squared_log_error.html
-
-    Note: In order to avoid error, negative predictions are clipped to 0. This
-    means that you should clip negative predictions manually after calling
-    `predict`.
-    """
-
-    def __init__(self):
-        super().__init__('rmsle', False)
-
-    def __call__(self, y_true: numpy.ndarray, y_score: numpy.ndarray, _=None):
-        """ Compute RMSLE (Root Mean Squared Logarithmic Error) of predictions.
-
-        Args:
-            y_true: Target matrix or vector
-            y_score: Score matrix or vector
-
-        Returns:
-            RMSLE of predictions vs targets.
-        """
-        y_score = numpy.clip(y_score, a_min=0, a_max=None)
-        return mean_squared_log_error(y_true, y_score)
+    def result(self):
+        raise NotImplementedError
 
 
 class UnsupervisedMetric(Metric):
@@ -254,6 +119,18 @@ class UnsupervisedMetric(Metric):
 
         return loss.item()
 
+    def _serialize_to_tensors(self):
+        raise NotImplementedError
+
+    def _restore_from_tensors(self, restored_tensors):
+        raise NotImplementedError
+
+    def update_state(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def result(self):
+        raise NotImplementedError
+
 
 class UnsupervisedNumpyMetric(Metric):
 
@@ -293,6 +170,18 @@ class UnsupervisedNumpyMetric(Metric):
         loss = numpy.mean(features_loss)
 
         return loss
+
+    def _serialize_to_tensors(self):
+        raise NotImplementedError
+
+    def _restore_from_tensors(self, restored_tensors):
+        raise NotImplementedError
+
+    def update_state(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def result(self):
+        raise NotImplementedError
 
 
 # def check_metrics(metrics):
@@ -347,8 +236,8 @@ class UnsupervisedNumpyMetric(Metric):
 #             res = metric(y_pred, embedded_x, obf_vars)
 #             logs[self.prefix + metric.name] = res
 #         return logs
-#
-#
+
+
 # @dataclass
 # class MetricContainer:
 #     """ Container holding a list of metrics.
