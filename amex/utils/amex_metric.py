@@ -5,6 +5,7 @@ import datatable
 import numpy
 import pandas
 import tensorflow
+import torch
 
 
 def _top_four_percent_captured(y_true: pandas.DataFrame, y_pred: pandas.DataFrame) -> float:
@@ -150,9 +151,45 @@ def amex_metric_tensorflow(y_true: tensorflow.Tensor, y_pred: tensorflow.Tensor)
     return 0.5 * (g + d)
 
 
+def amex_metric_pytorch(y_true: torch.Tensor, y_pred: torch.Tensor) -> float:
+
+    # convert dtypes to float64
+    y_true = y_true.double()
+    y_pred = y_pred.double()
+
+    # count of positives and negatives
+    n_pos = y_true.sum()
+    n_neg = y_pred.shape[0] - n_pos
+
+    # sorting by decreasing prediction values
+    indices = torch.argsort(y_pred, dim=0, descending=True)
+    preds, target = y_pred[indices], y_true[indices]
+
+    # filter the top 4% by cumulative row weights
+    weight = 20.0 - target * 19.0
+    cum_norm_weight = (weight / weight.sum()).cumsum(dim=0)
+    four_pct_filter = cum_norm_weight <= 0.04
+
+    # default rate captured at 4%
+    d = target[four_pct_filter].sum() / n_pos
+
+    # weighted Gini coefficient
+    lorentz = (target / n_pos).cumsum(dim=0)
+    gini = ((lorentz - cum_norm_weight) * weight).sum()
+
+    # max weighted Gini coefficient
+    gini_max = 10 * n_neg * (1 - 19 / (n_pos + 20 * n_neg))
+
+    # normalized weighted Gini coefficient
+    g = gini / gini_max
+
+    return 0.5 * (g + d)
+
+
 __all__ = [
     'amex_metric_official',
     'amex_metric_datatable',
     'amex_metric_numpy',
     'amex_metric_tensorflow',
+    'amex_metric_pytorch',
 ]
