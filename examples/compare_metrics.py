@@ -80,5 +80,5 @@ if __name__ == '__main__':
     # Official,   0.420962229000,
     # Datatable,  0.059550395900,
     # Numpy,      0.004801500000,
-    # TensorFlow, 0.005497016600, 
+    # TensorFlow, 0.005497016600,
     # Torch,      0.005006804100,
