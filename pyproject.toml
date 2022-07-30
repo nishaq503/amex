@@ -6,16 +6,34 @@ authors = ["Najib Ishaq <najib_ishaq@zoho.com>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.10"
-numpy = "^1.22"
+python = "^3.9"
+numpy = "^1.23"
 pandas = "^1.4"
-datatable = { git = "https://github.com/h2oai/datatable.git", branch = "main" }
-tensorflow = "^2.9"
-tabnet = "^0.1.6"
+datatable = [
+    { version = "^1.0", platform = "linux" },
+    { git = "https://github.com/h2oai/datatable.git", branch = "main", platform = "darwin" },
+]
 scikit-learn = "^1.1"
+scipy = "^1.9"
+torch = [
+#    { version = "^1.12", platform = "linux" },
+    { version = "^1.12", platform = "darwin" },
+]
+torchvision = [
+#    { version = "^0.13.0", platform = "linux" },
+    { version = "^0.13.0", platform = "darwin" },
+]
+torchaudio = [
+#    { version = "^0.12.0", platform = "linux" },
+    { version = "^0.12.0", platform = "darwin" },
+]
+pytorch-tabnet = "^3.1"
+tqdm = "^4.64"
 
 [tool.poetry.dev-dependencies]
 matplotlib = "^3.5"
+seaborn = "^0.11"
+streamlit = "^1.11"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
