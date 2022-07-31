@@ -77,6 +77,7 @@ FEATURES_CAT = [
 def feature_engineering():
     for i in [0, 1]:
         if (i == 0 and paths.TRAIN_FTR_PATH.exists()) or (i == 1 and paths.TEST_FTR_PATH.exists()):
+            logger.info(f'Skipping {"train" if i == 0 else "test"} data ...')
             continue
         # i == 0 -> process the train data
         # i == 1 -> process the test data
@@ -84,11 +85,6 @@ def feature_engineering():
         df = df.astype({col: numpy.float16 for col in FEATURES_AVG + FEATURES_MIN + FEATURES_MAX})
         cid = pandas.Categorical(df.pop('customer_ID'), ordered=True)
         last = (cid != numpy.roll(cid, -1))  # mask for last statement of every customer
-        if i == 0:  # train
-            target: pandas.DataFrame = datatable.fread(paths.TRAIN_LABELS_PATH).to_pandas()
-            # target = target.loc[last, 'target']
-            target = target.reset_index(drop=True)
-            target.to_feather(paths.TARGET_FTR_PATH)
 
         logger.info(f'Read {"train" if i == 0 else "test"} data ...')
         gc.collect()
@@ -163,20 +159,26 @@ def feature_engineering():
         del df_avg, df_max, df_min, df_last, df_categorical, cid, last, features_not_cat, ohe
         gc.collect()
 
-        if i == 0:  # train
-            # Free the memory
-            df.reset_index(drop=True, inplace=True)  # frees 0.2 GByte
-            df.to_feather(paths.TRAIN_FTR_PATH)
-        else:
-            df.to_feather(paths.TEST_FTR_PATH)
+        df.reset_index(drop=True, inplace=True)  # frees 0.2 GByte
+        df = df.astype(numpy.float16)
+        df.to_feather(paths.TRAIN_FTR_PATH if i == 0 else paths.TEST_FTR_PATH)
         logger.info(f'Saved processed {"train" if i == 0 else "test"} data ...')
 
         del df
         gc.collect()
 
-    train = pandas.read_feather(paths.TRAIN_FTR_PATH)
+    train = pandas.read_feather(paths.TRAIN_FTR_PATH).astype(numpy.float16)
+    test = pandas.read_feather(paths.TEST_FTR_PATH).astype(numpy.float16)
+
+    if not paths.TARGET_FTR_PATH.exists():
+        target: pandas.DataFrame = datatable.fread(paths.TRAIN_LABELS_PATH).to_pandas()
+        # target = target.loc[last, 'target']
+        target.pop('customer_ID')
+        target.reset_index(drop=True, inplace=True)
+        target.to_feather(paths.TARGET_FTR_PATH)
+        del target
+        gc.collect()
     target = pandas.read_feather(paths.TARGET_FTR_PATH)
-    test = pandas.read_feather(paths.TEST_FTR_PATH)
 
     logger.info(f'{train.shape = }, {target.shape = }, {test.shape = }')
     return train, target, test

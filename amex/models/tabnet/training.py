@@ -2,10 +2,11 @@
 """
 
 import gc
+import pathlib
 import time
 
-import numpy as np
-import pandas as pd
+import numpy
+import pandas
 import torch
 from pytorch_tabnet.metrics import Metric
 from pytorch_tabnet.tab_model import TabNetClassifier
@@ -14,6 +15,9 @@ from sklearn.model_selection import StratifiedKFold
 from amex.utils import amex_metric
 from amex.utils import helpers
 from . import data
+from ...utils import paths
+
+logger = helpers.make_logger(__name__)
 
 
 class AmexTabnet(Metric):
@@ -28,41 +32,39 @@ class AmexTabnet(Metric):
 
 
 def run_training(cfg):
-    train_df, target_df, test_df = data.feature_engineering(inference=True)
+    train_df, target_df, test_df = data.feature_engineering()
 
     helpers.seed_everything(seed=cfg.seed)
-    print('\n ', '-' * 50)
-    print('\nTraining: ', cfg.model)
-    print('\n ', '-' * 50)
 
-    print('\nSeed: ', cfg.seed)
-    print('N folds: ', cfg.N_folds)
-    print('train shape: ', train_df.shape)
-    print('targets shape: ', target_df.shape)
-
-    print('\nN features: ', len(train_df.columns.values.tolist()))
-    print('\n')
+    logger.info(f'Training {cfg.model}')
+    logger.info(f'Seed {cfg.seed}')
+    logger.info(f'Num Folds: {cfg.n_folds}')
+    logger.info(f'{train_df.shape = }, {target_df.shape = }, {test_df.shape = }')
+    logger.info(f'Num Features: {len(train_df.columns.values.tolist())}')
 
     # Create out of folds array
-    oof_predictions = np.zeros((train_df.shape[0]))
-    test_predictions = np.zeros(test_df.shape[0])
-    feature_importances = pd.DataFrame()
-    feature_importances["feature"] = train_df.columns.tolist()
-    stats = pd.DataFrame()
-    explain_matrices = []
-    masks_ = []
+    oof_predictions = numpy.zeros((train_df.shape[0]))
+    test_predictions = numpy.zeros(test_df.shape[0])
 
-    kfold = StratifiedKFold(n_splits=cfg.N_folds, shuffle=True, random_state=cfg.seed)
+    feature_importances = pandas.DataFrame()
+    feature_importances['feature'] = train_df.columns.tolist()
 
-    for fold, (train_idx, valid_idx) in enumerate(kfold.split(train_df, target_df)):
+    stats = pandas.DataFrame()
+    explain_matrices = list()
+    masks_ = list()
+    saved_model_paths = list()
+
+    fold_splitter = StratifiedKFold(n_splits=cfg.n_folds, shuffle=True, random_state=cfg.seed)
+
+    for fold, (train_idx, valid_idx) in enumerate(fold_splitter.split(train_df, target_df)):
 
         # DEBUG MODE
-        if cfg.DEBUG is True:
+        if cfg.debug is True:
             if fold > 0:
-                print('\nDEBUG mode activated: Will train only one fold...\n')
+                logger.info(f'DEBUG mode activated: Will train only one fold ...')
                 break
 
-        start = time.time()
+        start = time.perf_counter()
 
         train_x, train_y = train_df.loc[train_idx], target_df.loc[train_idx]
         valid_x, valid_y = train_df.loc[valid_idx], target_df.loc[valid_idx]
@@ -91,18 +93,18 @@ def run_training(cfg):
 
         # train
         model.fit(
-            np.array(train_x),
-            np.array(train_y.values.ravel()),
-            eval_set=[(np.array(valid_x), np.array(valid_y.values.ravel()))],
+            numpy.array(train_x),
+            numpy.array(train_y.values.ravel()),
+            eval_set=[(numpy.array(valid_x), numpy.array(valid_y.values.ravel()))],
             max_epochs=cfg.max_epochs,
             patience=50,
             batch_size=cfg.batch_size,
-            eval_metric=['auc', 'accuracy', AmexTabnet],
-        )  # Last metric is used for early stopping
+            eval_metric=['auc', 'accuracy', AmexTabnet],  # Last metric is used for early stopping
+        )
 
         # Saving best model
-        saving_path_name = f"./fold{fold}"
-        saved_filepath = model.save_model(saving_path_name)
+        saved_filepath = model.save_model(str(paths.WORKING_DIR.joinpath(f'fold_{fold + 1}')))
+        saved_model_paths.append(pathlib.Path(saved_filepath).resolve())
 
         # model explain-ability
         explain_matrix, masks = model.explain(valid_x.values)
@@ -113,29 +115,25 @@ def run_training(cfg):
         # Inference
         oof_predictions[valid_idx] = model.predict_proba(valid_x.values)[:, 1]
 
-        # if CFG
-        # logodds function
-
+        # log-odds function
         test_predictions += model.predict_proba(test_df.values)[:, 1] / 5
-        feature_importances[f"importance_fold{fold}+1"] = model.feature_importances_
+        feature_importances[f'importance_fold_{fold}+1'] = model.feature_importances_
 
-        # Loss , metric tracking
-        stats[f'fold{fold + 1}_train_loss'] = model.history['loss']
-        stats[f'fold{fold + 1}_val_metric'] = model.history['val_0_amex_tabnet']
+        # Loss and metric tracking
+        stats[f'fold_{fold + 1}_train_loss'] = model.history['loss']
+        stats[f'fold_{fold + 1}_val_metric'] = model.history['val_0_amex_tabnet']
 
-        end = time.time()
-        time_delta = np.round((end - start) / 60, 2)
-
-        print(f'\nFold {fold + 1}/{cfg.N_folds} | {time_delta:.2f} min')
+        time_taken = (time.perf_counter() - start) / 60
+        logger.info(f'Fold {fold + 1}/{cfg.n_folds} | {time_taken:.2f} minutes')
 
         # free memory
-        del train_x, train_y
-        del valid_x, valid_y
+        del train_x, train_y, valid_x, valid_y
         gc.collect()
 
-    print(f'OOF score across folds: {amex_metric.amex_metric_numpy(target_df, oof_predictions.flatten())}')
+    oof_score = amex_metric.amex_metric_numpy(target_df, oof_predictions.flatten())
+    logger.info(f'OOF score across folds: {oof_score:.6f}')
 
-    feature_importances['mean_importance'] = feature_importances[['importance_fold0+1', 'importance_fold1+1']].mean(axis=1)
+    feature_importances['mean_importance'] = feature_importances[['importance_fold_0+1', 'importance_fold_1+1']].mean(axis=1)
     feature_importances.sort_values(by='mean_importance', ascending=False, inplace=True)
 
-    return stats, feature_importances, masks_, explain_matrices, test_df, test_predictions, saved_filepath
+    return stats, feature_importances, masks_, explain_matrices, test_df, test_predictions, saved_model_paths
