@@ -110,6 +110,7 @@ def run_training(cfg):
             patience=50,
             batch_size=cfg.batch_size,
             eval_metric=['auc', 'accuracy', AmexTabnet],  # Last metric is used for early stopping
+            loss_fn=AmexLoss,
         )
 
         # Saving best model
