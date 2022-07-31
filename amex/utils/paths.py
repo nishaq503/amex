@@ -13,6 +13,9 @@ TEST_DATA_PATH = INPUT_DIR.joinpath('test_data.csv')
 SAMPLE_SUBMISSION_PATH = INPUT_DIR.joinpath('sample_submission.csv')
 
 WORKING_DIR = ROOT_DIR.joinpath('working', 'amex-default-prediction')
+OHE_PATH = WORKING_DIR.joinpath('ohe.pickle')
 TRAIN_FTR_PATH = WORKING_DIR.joinpath('train_processed.ftr')
 TARGET_FTR_PATH = WORKING_DIR.joinpath('target_processed.ftr')
 TEST_FTR_PATH = WORKING_DIR.joinpath('test_processed.ftr')
+
+SUBMISSION_PATH = WORKING_DIR.joinpath('submission.csv')

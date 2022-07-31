@@ -7,7 +7,6 @@ import pickle
 import datatable
 import numpy
 import pandas
-from sklearn.preprocessing import OneHotEncoder
 
 from amex.utils import helpers
 from amex.utils import paths
@@ -76,63 +75,85 @@ FEATURES_CAT = [
 
 
 def feature_engineering():
-
     for i in [0, 1]:
         if (i == 0 and paths.TRAIN_FTR_PATH.exists()) or (i == 1 and paths.TEST_FTR_PATH.exists()):
             continue
         # i == 0 -> process the train data
         # i == 1 -> process the test data
         df: pandas.DataFrame = datatable.fread([paths.TRAIN_DATA_PATH, paths.TEST_DATA_PATH][i]).to_pandas()
+        df = df.astype({col: numpy.float16 for col in FEATURES_AVG + FEATURES_MIN + FEATURES_MAX})
         cid = pandas.Categorical(df.pop('customer_ID'), ordered=True)
         last = (cid != numpy.roll(cid, -1))  # mask for last statement of every customer
         if i == 0:  # train
-            target = df.loc[last, 'target']
+            target: pandas.DataFrame = datatable.fread(paths.TRAIN_LABELS_PATH).to_pandas()
+            # target = target.loc[last, 'target']
             target = target.reset_index(drop=True)
             target.to_feather(paths.TARGET_FTR_PATH)
 
         logger.info(f'Read {"train" if i == 0 else "test"} data ...')
         gc.collect()
 
-        df_avg = (df
-                  .groupby(cid)
-                  .mean()[FEATURES_AVG]
-                  .rename(columns={f: f"{f}_avg" for f in FEATURES_AVG}))
+        df_avg = (
+            df
+            .groupby(cid)
+            .mean()[FEATURES_AVG]
+            .rename(columns={f: f"{f}_avg" for f in FEATURES_AVG})
+        )
         logger.info(f'Computed avg features for {"train" if i == 0 else "test"} data ...')
         gc.collect()
 
-        df_max = (df
-                  .groupby(cid)
-                  .max()[FEATURES_MAX]
-                  .rename(columns={f: f"{f}_max" for f in FEATURES_MAX}))
+        df_max = (
+            df
+            .groupby(cid)
+            .max()[FEATURES_MAX]
+            .rename(columns={f: f"{f}_max" for f in FEATURES_MAX})
+        )
         logger.info(f'Computed max features for {"train" if i == 0 else "test"} data ...')
         gc.collect()
 
-        df_min = (df
-                  .groupby(cid)
-                  .min()[FEATURES_MIN]
-                  .rename(columns={f: f"{f}_min" for f in FEATURES_MIN}))
+        df_min = (
+            df
+            .groupby(cid)
+            .min()[FEATURES_MIN]
+            .rename(columns={f: f"{f}_min" for f in FEATURES_MIN})
+        )
         logger.info(f'Computed min features for {"train" if i == 0 else "test"} data ...')
         gc.collect()
 
-        df_last = (df.loc[last, FEATURES_LAST]
-                   .rename(columns={f: f"{f}_last" for f in FEATURES_LAST})
-                   .set_index(numpy.asarray(cid[last])))
+        df_last = (
+            df
+            .loc[last, FEATURES_LAST]
+            .rename(columns={f: f"{f}_last" for f in FEATURES_LAST})
+            .set_index(numpy.asarray(cid[last]))
+        )
         logger.info(f'Computed last features for {"train" if i == 0 else "test"} data ...')
         del df  # we no longer need the original data
         gc.collect()
 
         df_categorical = df_last[FEATURES_CAT].astype(object)
-        features_not_cat = [f for f in df_last.columns if f not in FEATURES_CAT]
-        if i == 0:  # train
-            ohe = OneHotEncoder(drop='first', sparse=False, dtype=numpy.float32, handle_unknown='ignore')
-            ohe.fit(df_categorical)
-            with open(paths.WORKING_DIR.joinpath('ohe.pickle'), 'wb') as writer:
-                pickle.dump(ohe, writer)
-        else:
-            with open(paths.WORKING_DIR.joinpath('ohe.pickle'), 'rb') as reader:
+        df_categorical.fillna(value=0, inplace=True)
+
+        if paths.OHE_PATH.exists():
+            with open(paths.OHE_PATH, 'rb') as reader:
                 ohe = pickle.load(reader)
+        else:
+            ohe = dict()
+
+        for col in df_categorical.columns.tolist():
+            categories = list(sorted(set(df_categorical[col].values.tolist())))
+            mapping = {c: i for i, c in enumerate(categories)}
+            if col in ohe:
+                ohe[col].update(mapping)
+            else:
+                ohe[col] = mapping
+            df_categorical[col] = df_categorical[col].apply(lambda v: mapping[v])
+
+        with open(paths.OHE_PATH, 'wb') as writer:
+            pickle.dump(ohe, writer)
+
+        features_not_cat = [f for f in df_last.columns if f not in FEATURES_CAT]
         df_categorical = pandas.DataFrame(
-            ohe.transform(df_categorical).astype(numpy.float16),
+            df_categorical.astype(numpy.float16),
             index=df_categorical.index,
         ).rename(columns=str)
         logger.info(f'Computed categorical features for {"train" if i == 0 else "test"} data ...')
@@ -148,6 +169,7 @@ def feature_engineering():
             df.to_feather(paths.TRAIN_FTR_PATH)
         else:
             df.to_feather(paths.TEST_FTR_PATH)
+        logger.info(f'Saved processed {"train" if i == 0 else "test"} data ...')
 
         del df
         gc.collect()
