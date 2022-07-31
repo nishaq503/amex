@@ -14,8 +14,9 @@ from sklearn.model_selection import StratifiedKFold
 
 from amex.utils import amex_metric
 from amex.utils import helpers
+from amex.utils import paths
+from amex.utils import amex_loss
 from . import data
-from ...utils import paths
 
 logger = helpers.make_logger(__name__)
 
@@ -27,8 +28,17 @@ class AmexTabnet(Metric):
         self._maximize = True
 
     def __call__(self, y_true, y_pred):
-        amex = amex_metric.amex_metric_numpy(y_true, y_pred[:, 1])
-        return max(amex, 0.)
+        return max(0, amex_metric.amex_metric_pytorch(y_true, y_pred[:, 1]))
+
+
+class AmexLoss(Metric):
+
+    def __init__(self):
+        self._name = 'amex_tabnet'
+        self._maximize = True
+
+    def __call__(self, y_true, y_pred):
+        return max(0, amex_loss.amex_loss_pytorch(y_true, y_pred))
 
 
 def run_training(cfg):

@@ -43,7 +43,7 @@ def amex_metric_official(y_true: pandas.DataFrame, y_pred: pandas.DataFrame) -> 
     return 0.5 * (g + d)
 
 
-def amex_metric_datatable(y_true: datatable.Frame, y_pred: datatable.Frame) -> float:
+def amex_metric_datatable(y_true: datatable.Frame, y_pred: datatable.Frame) -> datatable.float32:
 
     # create datatable frame
     # noinspection PyArgumentList
@@ -85,7 +85,7 @@ def amex_metric_datatable(y_true: datatable.Frame, y_pred: datatable.Frame) -> f
     return m
 
 
-def amex_metric_numpy(y_true: numpy.array, y_pred: numpy.array) -> float:
+def amex_metric_numpy(y_true: numpy.array, y_pred: numpy.array) -> numpy.float32:
 
     # count of positives and negatives
     n_pos = y_true.sum()
@@ -116,7 +116,7 @@ def amex_metric_numpy(y_true: numpy.array, y_pred: numpy.array) -> float:
     return 0.5 * (g + d)
 
 
-def amex_metric_tensorflow(y_true: tensorflow.Tensor, y_pred: tensorflow.Tensor) -> float:
+def amex_metric_tensorflow(y_true: tensorflow.Tensor, y_pred: tensorflow.Tensor) -> tensorflow.float32:
 
     # convert dtypes to float64
     y_true = tensorflow.cast(y_true, dtype=tensorflow.float64)
@@ -151,7 +151,7 @@ def amex_metric_tensorflow(y_true: tensorflow.Tensor, y_pred: tensorflow.Tensor)
     return 0.5 * (g + d)
 
 
-def amex_metric_pytorch(y_true: torch.Tensor, y_pred: torch.Tensor) -> float:
+def amex_metric_pytorch(y_true: torch.Tensor, y_pred: torch.Tensor) -> torch.float32:
 
     # convert dtypes to float64
     y_true = y_true.double()

@@ -77,7 +77,7 @@ FEATURES_CAT = [
 def feature_engineering():
     for i in [0, 1]:
         if (i == 0 and paths.TRAIN_FTR_PATH.exists()) or (i == 1 and paths.TEST_FTR_PATH.exists()):
-            logger.info(f'Skipping {"train" if i == 0 else "test"} data ...')
+            logger.info(f'Skipping {"train" if i == 0 else "test"} data because the processed ifle already exists ...')
             continue
         # i == 0 -> process the train data
         # i == 1 -> process the test data

@@ -12,7 +12,7 @@ from amex.utils import helpers
 from amex.utils import paths
 
 logging.basicConfig(
-    format='%(asctime)s - %(levelname)s - %(name)s - %(module)s.%(funcName)s - %(message)s',
+    format='%(asctime)s - %(levelname)s - %(name)s - %(funcName)s - %(message)s',
     datefmt='%d-%b-%y %H:%M:%S',
 )
 logger = helpers.make_logger(__name__)
