@@ -19,11 +19,11 @@ torchvision = "~0.13.0"
 torchaudio = "~0.12.0"
 pytorch-tabnet = "~3.1"
 tqdm = "~4.64"
-
-[tool.poetry.dev-dependencies]
 matplotlib = "~3.5"
 seaborn = "~0.11"
 streamlit = "~1.11"
+
+[tool.poetry.dev-dependencies]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
