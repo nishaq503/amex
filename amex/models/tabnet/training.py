@@ -9,36 +9,26 @@ import numpy
 import pandas
 import torch
 from pytorch_tabnet.metrics import Metric
+from pytorch_tabnet.pretraining import TabNetPretrainer
 from pytorch_tabnet.tab_model import TabNetClassifier
 from sklearn.model_selection import StratifiedKFold
 
 from amex.utils import amex_metric
 from amex.utils import helpers
 from amex.utils import paths
-from amex.utils import amex_loss
 from . import data
 
 logger = helpers.make_logger(__name__)
 
 
-class AmexTabnet(Metric):
+class AmexMetric(Metric):
 
     def __init__(self):
-        self._name = 'amex_tabnet'
+        self._name = 'amex'
         self._maximize = True
 
     def __call__(self, y_true, y_pred):
-        return max(0, amex_metric.amex_metric_pytorch(y_true, y_pred[:, 1]))
-
-
-class AmexLoss(Metric):
-
-    def __init__(self):
-        self._name = 'amex_tabnet'
-        self._maximize = True
-
-    def __call__(self, y_true, y_pred):
-        return max(0, amex_loss.amex_loss_pytorch(y_true, y_pred))
+        return max(0, amex_metric.amex_metric_numpy(y_true, y_pred[:, 1]))
 
 
 def run_training(cfg):
@@ -51,6 +41,18 @@ def run_training(cfg):
     logger.info(f'Num Folds: {cfg.n_folds}')
     logger.info(f'{train_df.shape = }, {target_df.shape = }, {test_df.shape = }')
     logger.info(f'Num Features: {len(train_df.columns.values.tolist())}')
+
+    logger.info(f'Starting pre-training unsupervised model ...')
+    unsupervised_model = TabNetPretrainer(
+        optimizer_fn=torch.optim.Adam,
+        optimizer_params=dict(lr=2e-2),
+        mask_type='entmax'  # "sparsemax"
+    )
+    unsupervised_model.fit(
+        X_train=numpy.concatenate([numpy.array(train_df), numpy.array(test_df)]),
+        pretraining_ratio=0.8,
+    )
+    logger.info(f'Finished pre-training unsupervised model ...')
 
     # Create out of folds array
     oof_predictions = numpy.zeros((train_df.shape[0]))
@@ -109,8 +111,8 @@ def run_training(cfg):
             max_epochs=cfg.max_epochs,
             patience=50,
             batch_size=cfg.batch_size,
-            eval_metric=['auc', 'accuracy', AmexTabnet],  # Last metric is used for early stopping
-            loss_fn=AmexLoss,
+            eval_metric=['auc', 'accuracy', AmexMetric],  # Last metric is used for early stopping
+            from_unsupervised=unsupervised_model,
         )
 
         # Saving best model
