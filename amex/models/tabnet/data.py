@@ -128,14 +128,14 @@ def preprocess(name: typing.Literal['train', 'test']):
     gc.collect()
 
     logger.info(f'Computing aggregate numerical features in {name} dataset ...')
-    # alpha = 2 / 11
-    # ema_df = pandas.DataFrame()
-    # for i, col in enumerate(num_features, start=1):
-    #     logger.info(f'Computing ema of {col} {i}/{len(num_features)} in {name} dataset ...')
-    #     ema_df[f'{col}_ema'] = raw_num_df[col].transform(
-    #         lambda vals: functools.reduce(lambda x, y: alpha * x + (1 - alpha) * y, vals, 0)
-    #     )
-    # logger.info(f'Computed ema features in {name} dataset ...')
+    alpha = 2 / 11
+    ema_df = pandas.DataFrame()
+    for i, col in enumerate(num_features, start=1):
+        logger.info(f'Computing ema of {col} {i}/{len(num_features)} in {name} dataset ...')
+        ema_df[f'{col}_ema'] = raw_num_df[col].transform(
+            lambda vals: functools.reduce(lambda x, y: alpha * x + (1 - alpha) * y, vals, 0)
+        )
+    logger.info(f'Computed ema features in {name} dataset ...')
     mean_df = raw_num_df.mean().rename(columns={f: f'{f}_mean' for f in num_features})
     logger.info(f'Computed mean features in {name} dataset ...')
     std_df = raw_num_df.std().rename(columns={f: f'{f}_std' for f in num_features}).fillna(0)
@@ -175,10 +175,11 @@ def feature_engineering(force: bool = False):
     train = pandas.read_feather(paths.TRAIN_FTR_PATH).astype(numpy.float16)
     test = pandas.read_feather(paths.TEST_FTR_PATH).astype(numpy.float16)
 
-    # print(train[train.columns[train.isna().any()]].isna().sum())
-    # print(test[test.columns[test.isna().any()]].isna().sum())
     print(train.columns[train.isna().any()])
+    print(train[train.columns[train.isna().any()]].isna().sum())
+
     print(test.columns[test.isna().any()])
+    print(test[test.columns[test.isna().any()]].isna().sum())
 
     if not paths.TARGET_FTR_PATH.exists():
         target: pandas.DataFrame = datatable.fread(paths.TRAIN_LABELS_PATH).to_pandas()
