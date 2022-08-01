@@ -1,5 +1,6 @@
 """ https://www.kaggle.com/code/medali1992/amex-tabnetclassifier-feature-eng-0-791
 """
+
 import logging
 import warnings
 
@@ -43,7 +44,7 @@ class CFG:
 
 def main():
 
-    stats, feature_importances, masks_, explain_matrices, test_df, test_predictions, _ = tabnet.run_training(CFG)
+    stats, feature_importances, masks, explain_matrices, test_df, test_predictions, _ = tabnet.run_training(CFG)
 
     figure = pyplot.figure(figsize=(6, 6), dpi=300)
     for i in stats.filter(like='train', axis=1).columns.tolist():
@@ -71,7 +72,7 @@ def main():
     axes = axes.flatten()
 
     k = -1
-    for i, (mask, j) in enumerate(zip(masks_, axes)):
+    for i, (mask, j) in enumerate(zip(masks, axes)):
         seaborn.heatmap(mask[:150], ax=j)
         if i % 2 == 0:
             k += 1

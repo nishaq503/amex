@@ -24,7 +24,7 @@ logger = helpers.make_logger(__name__)
 class AmexMetric(Metric):
 
     def __init__(self):
-        self._name = 'amex'
+        self._name = 'amex_metric'
         self._maximize = True
 
     def __call__(self, y_true, y_pred):
@@ -42,17 +42,18 @@ def run_training(cfg):
     logger.info(f'{train_df.shape = }, {target_df.shape = }, {test_df.shape = }')
     logger.info(f'Num Features: {len(train_df.columns.values.tolist())}')
 
-    logger.info(f'Starting pre-training unsupervised model ...')
-    unsupervised_model = TabNetPretrainer(
-        optimizer_fn=torch.optim.Adam,
-        optimizer_params=dict(lr=2e-2),
-        mask_type='entmax'  # "sparsemax"
-    )
-    unsupervised_model.fit(
-        X_train=numpy.concatenate([numpy.array(train_df), numpy.array(test_df)]),
-        pretraining_ratio=0.8,
-    )
-    logger.info(f'Finished pre-training unsupervised model ...')
+    # logger.info(f'Starting pre-training unsupervised model ...')
+    # unsupervised_model = TabNetPretrainer(
+    #     optimizer_fn=torch.optim.Adam,
+    #     optimizer_params=dict(lr=2e-2),
+    #     mask_type='entmax'  # "sparsemax"
+    # )
+    # unsupervised_model.fit(
+    #     X_train=numpy.concatenate([numpy.array(train_df), numpy.array(test_df)]),
+    #     pretraining_ratio=0.8,
+    #     max_epochs=1
+    # )
+    # logger.info(f'Finished pre-training unsupervised model ...')
 
     # Create out of folds array
     oof_predictions = numpy.zeros((train_df.shape[0]))
@@ -108,11 +109,12 @@ def run_training(cfg):
             numpy.array(train_x),
             numpy.array(train_y.values.ravel()),
             eval_set=[(numpy.array(valid_x), numpy.array(valid_y.values.ravel()))],
-            max_epochs=cfg.max_epochs,
+            # max_epochs=cfg.max_epochs,
+            max_epochs=1,
             patience=50,
             batch_size=cfg.batch_size,
             eval_metric=['auc', 'accuracy', AmexMetric],  # Last metric is used for early stopping
-            from_unsupervised=unsupervised_model,
+            # from_unsupervised=unsupervised_model,
         )
 
         # Saving best model
@@ -134,7 +136,7 @@ def run_training(cfg):
 
         # Loss and metric tracking
         stats[f'fold_{fold + 1}_train_loss'] = model.history['loss']
-        stats[f'fold_{fold + 1}_val_metric'] = model.history['val_0_amex_tabnet']
+        stats[f'fold_{fold + 1}_val_metric'] = model.history['val_0_amex_metric']
 
         time_taken = (time.perf_counter() - start) / 60
         logger.info(f'Fold {fold + 1}/{cfg.n_folds} | {time_taken:.2f} minutes')
