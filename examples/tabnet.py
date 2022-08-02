@@ -38,8 +38,8 @@ class CFG:
     model = 'tabnet'
     n_folds = 5
     seed = 42
-    batch_size = 2048
-    max_epochs = 128
+    batch_size = 1024
+    max_epochs = 256
 
 
 def main():

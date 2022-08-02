@@ -87,6 +87,7 @@ def preprocess(name: typing.Literal['train', 'test']):
     logger.info(f'Reading raw {name} dataset ...')
     raw_df: pandas.DataFrame = datatable.fread(input_path).to_pandas()
     raw_df.fillna(0, inplace=True)
+    logger.info(f'Read raw {name} dataset with shape {raw_df.shape}...')
     cust_id = pandas.Categorical(raw_df.pop('customer_ID'), ordered=True)
     # last_id = (cust_id != numpy.roll(cust_id, -1))  # mask for last statement of every customer
 
@@ -122,35 +123,51 @@ def preprocess(name: typing.Literal['train', 'test']):
         del train
         gc.collect()
 
+    logger.info(f'Computed {cat_df.shape = } in {name} dataset ...')
+
     num_features = [f for f in raw_df.columns.tolist() if f not in CAT_FEATURES + NON_FEATURES]
     raw_num_df = raw_df[num_features].astype(numpy.float16).groupby(cust_id)
     del raw_df
     gc.collect()
 
     logger.info(f'Computing aggregate numerical features in {name} dataset ...')
-    alpha = 2 / 11
-    ema_df = pandas.DataFrame()
-    for i, col in enumerate(num_features, start=1):
-        logger.info(f'Computing ema of {col} {i}/{len(num_features)} in {name} dataset ...')
-        ema_df[f'{col}_ema'] = raw_num_df[col].transform(
-            lambda vals: functools.reduce(lambda x, y: alpha * x + (1 - alpha) * y, vals, 0)
-        )
-    logger.info(f'Computed ema features in {name} dataset ...')
+    # ema_df = (
+    #     raw_num_df
+    #     .transform(lambda x: x.ewm(alpha=2 / 11).mean())
+    #     .groupby(cust_id)
+    #     .last()
+    #     .rename(columns={f: f'{f}_ema' for f in num_features})
+    #     .fillna(0)
+    # )
+    # ema_df = pandas.DataFrame()
+    # for i, col in enumerate(num_features, start=1):
+    #     logger.info(f'Computing ema of {col} {i}/{len(num_features)} in {name} dataset ...')
+    #     logger.info(f'{ema_df.shape = } ...')
+    #     ema_df[f'{col}_ema'] = raw_num_df[col].transform(lambda x: x.ewm(alpha=2 / 11).mean()).groupby(cust_id).last()
+    # ema_df.fillna(0, inplace=True)
+    # logger.info(f'Computed {ema_df.shape = } in {name} dataset ...')
+
     mean_df = raw_num_df.mean().rename(columns={f: f'{f}_mean' for f in num_features})
-    logger.info(f'Computed mean features in {name} dataset ...')
+    logger.info(f'Computed {mean_df.shape = } in {name} dataset ...')
+
     std_df = raw_num_df.std().rename(columns={f: f'{f}_std' for f in num_features}).fillna(0)
-    logger.info(f'Computed std features in {name} dataset ...')
+    logger.info(f'Computed {std_df.shape = } in {name} dataset ...')
+
     min_df = raw_num_df.min().rename(columns={f: f'{f}_min' for f in num_features})
-    logger.info(f'Computed min features in {name} dataset ...')
+    logger.info(f'Computed {min_df.shape = } in {name} dataset ...')
+
     max_df = raw_num_df.max().rename(columns={f: f'{f}_max' for f in num_features})
-    logger.info(f'Computed max features in {name} dataset ...')
+    logger.info(f'Computed {max_df.shape = } in {name} dataset ...')
+
     last_df = raw_num_df.last().rename(columns={f: f'{f}_last' for f in num_features})
-    logger.info(f'Computed last features in {name} dataset ...')
+    logger.info(f'Computed {last_df.shape = } in {name} dataset ...')
 
     del raw_num_df
     gc.collect()
 
     logger.info(f'Concatenating engineered features in {name} dataset ...')
+    # df = pandas.concat([cat_df, ema_df, mean_df, std_df, min_df, max_df, last_df], axis=1)
+    # del cat_df, ema_df, mean_df, std_df, min_df, max_df, last_df
     df = pandas.concat([cat_df, mean_df, std_df, min_df, max_df, last_df], axis=1)
     del cat_df, mean_df, std_df, min_df, max_df, last_df
     gc.collect()
@@ -193,114 +210,3 @@ def feature_engineering(force: bool = False):
 
     logger.info(f'{train.shape = }, {target.shape = }, {test.shape = }')
     return train, target, test
-
-
-# def feature_engineering():
-#     for i in [0, 1]:
-#         if (i == 0 and paths.TRAIN_FTR_PATH.exists()) or (i == 1 and paths.TEST_FTR_PATH.exists()):
-#             logger.info(f'Skipping {"train" if i == 0 else "test"} data because the processed ifle already exists ...')
-#             continue
-#         # i == 0 -> process the train data
-#         # i == 1 -> process the test data
-#         df: pandas.DataFrame = datatable.fread([paths.TRAIN_DATA_PATH, paths.TEST_DATA_PATH][i]).to_pandas()
-#         df = df.astype({col: numpy.float16 for col in FEATURES_AVG + FEATURES_MIN + FEATURES_MAX})
-#         cid = pandas.Categorical(df.pop('customer_ID'), ordered=True)
-#         last = (cid != numpy.roll(cid, -1))  # mask for last statement of every customer
-#
-#         logger.info(f'Read {"train" if i == 0 else "test"} data ...')
-#         gc.collect()
-#
-#         df_avg = (
-#             df
-#             .groupby(cid)
-#             .mean()[FEATURES_AVG]
-#             .rename(columns={f: f"{f}_avg" for f in FEATURES_AVG})
-#         )
-#         logger.info(f'Computed avg features for {"train" if i == 0 else "test"} data ...')
-#         gc.collect()
-#
-#         df_max = (
-#             df
-#             .groupby(cid)
-#             .max()[FEATURES_MAX]
-#             .rename(columns={f: f"{f}_max" for f in FEATURES_MAX})
-#         )
-#         logger.info(f'Computed max features for {"train" if i == 0 else "test"} data ...')
-#         gc.collect()
-#
-#         df_min = (
-#             df
-#             .groupby(cid)
-#             .min()[FEATURES_MIN]
-#             .rename(columns={f: f"{f}_min" for f in FEATURES_MIN})
-#         )
-#         logger.info(f'Computed min features for {"train" if i == 0 else "test"} data ...')
-#         gc.collect()
-#
-#         df_last = (
-#             df
-#             .loc[last, FEATURES_LAST]
-#             .rename(columns={f: f"{f}_last" for f in FEATURES_LAST})
-#             .set_index(numpy.asarray(cid[last]))
-#         )
-#         logger.info(f'Computed last features for {"train" if i == 0 else "test"} data ...')
-#         del df  # we no longer need the original data
-#         gc.collect()
-#
-#         features_cat_last = [f'{f}_last' for f in CAT_FEATURES]
-#         df_categorical = df_last[features_cat_last].astype(object)
-#         df_categorical.fillna(value=0, inplace=True)
-#
-#         if paths.OHE_PATH.exists():
-#             with open(paths.OHE_PATH, 'rb') as reader:
-#                 ohe = pickle.load(reader)
-#         else:
-#             ohe = dict()
-#
-#         for col in df_categorical.columns.tolist():
-#             categories = list(sorted(set(df_categorical[col].values.tolist())))
-#             mapping = {c: i for i, c in enumerate(categories)}
-#             if col in ohe:
-#                 ohe[col].update(mapping)
-#             else:
-#                 ohe[col] = mapping
-#             df_categorical[col] = df_categorical[col].apply(lambda v: mapping[v])
-#
-#         with open(paths.OHE_PATH, 'wb') as writer:
-#             pickle.dump(ohe, writer)
-#
-#         features_not_cat = [f for f in df_last.columns if f not in features_cat_last]
-#         df_categorical = pandas.DataFrame(
-#             df_categorical.astype(numpy.float16),
-#             index=df_categorical.index,
-#         ).rename(columns=str)
-#         logger.info(f'Computed categorical features for {"train" if i == 0 else "test"} data ...')
-#
-#         df = pandas.concat([df_last[features_not_cat], df_categorical, df_avg, df_min, df_max], axis=1)
-#         df.fillna(value=0, inplace=True)  # Impute missing values
-#         del df_avg, df_max, df_min, df_last, df_categorical, cid, last, features_not_cat, ohe
-#         gc.collect()
-#
-#         df.reset_index(drop=True, inplace=True)  # frees 0.2 GByte
-#         df = df.astype(numpy.float16)
-#         df.to_feather(paths.TRAIN_FTR_PATH if i == 0 else paths.TEST_FTR_PATH)
-#         logger.info(f'Saved processed {"train" if i == 0 else "test"} data ...')
-#
-#         del df
-#         gc.collect()
-#
-#     train = pandas.read_feather(paths.TRAIN_FTR_PATH).astype(numpy.float16)
-#     test = pandas.read_feather(paths.TEST_FTR_PATH).astype(numpy.float16)
-#
-#     if not paths.TARGET_FTR_PATH.exists():
-#         target: pandas.DataFrame = datatable.fread(paths.TRAIN_LABELS_PATH).to_pandas()
-#         # target = target.loc[last, 'target']
-#         target.pop('customer_ID')
-#         target.reset_index(drop=True, inplace=True)
-#         target.to_feather(paths.TARGET_FTR_PATH)
-#         del target
-#         gc.collect()
-#     target = pandas.read_feather(paths.TARGET_FTR_PATH)
-#
-#     logger.info(f'{train.shape = }, {target.shape = }, {test.shape = }')
-#     return train, target, test

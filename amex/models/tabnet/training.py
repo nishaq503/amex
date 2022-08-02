@@ -51,8 +51,9 @@ def run_training(cfg):
     unsupervised_model.fit(
         X_train=numpy.concatenate([numpy.array(train_df), numpy.array(test_df)]),
         pretraining_ratio=0.8,
-        max_epochs=128,
+        max_epochs=32,
     )
+    unsupervised_path = unsupervised_model.save_model(str(paths.WORKING_DIR.joinpath(f'unsupervised_model')))
     logger.info(f'Finished pre-training unsupervised model ...')
 
     # Create out of folds array
@@ -65,7 +66,7 @@ def run_training(cfg):
     stats = pandas.DataFrame()
     explain_matrices = list()
     masks_ = list()
-    saved_model_paths = list()
+    saved_model_paths = [unsupervised_path]
 
     fold_splitter = StratifiedKFold(n_splits=cfg.n_folds, shuffle=True, random_state=cfg.seed)
 
